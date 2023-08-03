@@ -1,0 +1,261 @@
+//-------------------------------------------------------------------------------------
+// Module name: FPU
+// Description: Floating point control unit
+// Author: Elena Le
+// Project: Capstone 2
+//-------------------------------------------------------------------------------------
+module fpu
+import mypkg::*;
+(
+  input logic        clk_i,
+  input logic [31:0] operand_a,
+  input logic [31:0] operand_b,
+  fpu_op_e           opcode,
+  output logic[31:0] result_o
+);
+
+// operand_a, operand_b, result_o
+logic        sign_a,sign_b,sign_o;
+logic [23:0] mantissa_a, mantissa_b, mantissa_o;
+logic [7:0]  exponent_a, exponent_b, exponent_o;
+
+
+// ADD - SUB - MUL
+logic [31:0] adder_a_i;
+logic [31:0] adder_b_i;
+logic [31:0] adder_result_o;
+logic [31:0] mul_a_i;
+logic [31:0] mul_b_i;
+logic [31:0] mul_result_o;
+// compare
+logic [31:0] min;
+logic [31:0] max;
+logic        equal;
+logic        less;
+logic        leq;
+
+fcmp comparator(
+  .clk_i     (clk_i),
+  .operand_a (operand_a),
+  .operand_b (operand_b),
+  .min       (min),
+  .max       (max),
+  .equal     (equal),
+  .less      (less),
+  .less_equal(leq)
+);
+//logic [31:0] div_a_i;
+//logic [32:0] div_b_i;
+//logic [31:0] div_result_o;
+
+// normalize operand_a
+assign sign_a     = operand_a[31];
+assign exponent_a = operand_a[30:23];
+assign mantissa_a = {1'b1,operand_a[22:0]};
+
+// normalize operand_b
+assign sign_b     = operand_b[31];
+assign exponent_b = operand_b[30:23];
+assign mantissa_b = {1'b1,operand_b[22:0]};
+
+// normalize result
+assign result_o   = {sign_o,exponent_o,mantissa_o[22:0]};
+
+
+always_ff@(posedge(clk_i))
+begin
+  case(opcode)
+    FADD:
+      begin
+        if((exponent_a==255 && mantissa_a !=0) || (exponent_b==0 && mantissa_b ==0))            //  if a is NaN -> a+b = NaN
+          begin
+            sign_o     <= sign_a;
+            mantissa_o <= mantissa_a;
+            exponent_o <= exponent_a;
+          end
+        else if((exponent_b==255 && mantissa_b !=0) || (exponent_a==0 && mantissa_a ==0))      // if b is NaN -> a+b = NaN
+          begin
+            sign_o     <= sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else if((exponent_a==255 && mantissa_a== 0) || (exponent_b==255 && mantissa_b==0))   //  If a or b is inf -> result is inf
+          begin
+            sign_o     <= sign_a^sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else
+          begin
+            adder_a_i <= operand_a;
+            adder_b_i <= operand_b;
+            sign_o    <= adder_result_o[31];
+            exponent_o<= adder_result_o[30:23];
+            mantissa_o<= adder_result_o[22:0];
+          end
+      end
+    FSUB:
+      begin
+        if((exponent_a==256 && mantissa_a !=0) || (exponent_b==0 && mantissa_b ==0))            //  if a is NaN -> a-b = NaN
+          begin
+            sign_o     <= sign_a;
+            mantissa_o <= mantissa_a;
+            exponent_o <= exponent_a;
+          end
+        else if((exponent_b==255 && mantissa_b !=0) || (exponent_a==0 && mantissa_a ==0))      // if b is NaN -> a-b = NaN
+          begin
+            sign_o     <= sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else if((exponent_a==255 && mantissa_a== 0) || (exponent_b==255 && mantissa_b==0))   //  If a or b is inf -> result is inf
+          begin
+            sign_o     <= sign_a^sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else
+          begin
+            adder_a_i <= operand_a;
+            adder_b_i <= {~operand_b[31],operand_b[30:0]};
+            sign_o    <= adder_result_o[31];
+            exponent_o<= adder_result_o[30:23];
+            mantissa_o<= adder_result_o[22:0];
+          end
+      end
+    FMUL:
+      begin
+        if((exponent_a==255 && mantissa_a !=0) || (exponent_b==0 && mantissa_b ==0))            //  if a is NaN -> a*b = NaN
+
+          begin
+            sign_o     <= sign_a;
+            mantissa_o <= mantissa_a;
+            exponent_o <= exponent_a;
+          end
+        else if((exponent_b==255 && mantissa_b !=0) || (exponent_a==0 && mantissa_a ==0))      // if b is NaN -> a*b = NaN
+          begin
+            sign_o     <= sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else if((exponent_a==255 && mantissa_a== 0) || (exponent_b==255 && mantissa_b==0))   //  If a or b is inf -> result is inf
+          begin
+            sign_o     <= sign_a^sign_b;
+            mantissa_o <= mantissa_b;
+            exponent_o <= exponent_b;
+          end
+        else
+          begin
+            mul_a_i   <= operand_a;
+            mul_b_i   <= operand_b;
+            sign_o    <= mul_result_o[31];
+            exponent_o<= mul_result_o[30:23];
+            mantissa_o<= mul_result_o[22:0];
+          end
+      end
+//    FDIV:
+//      begin
+//        if((exponent_a==255 && mantissa_a !=0) || (exponent_b==0 && mantissa_b ==0))            //  if a is NaN -> a/b = NaN
+//          begin
+//            sign_o     = sign_a;
+//            mantissa_o = mantissa_a;
+//            exponent_o = exponent_a;
+//          end
+//        else if((exponent_b==255 && mantissa_b !=0) || (exponent_a==0 && mantissa_a ==0))      // if b is NaN -> a/b = NaN
+//          begin
+//            sign_o     = sign_b;
+//            mantissa_o = mantissa_b;
+//            exponent_o = exponent_b;
+//          end
+//        else if((exponent_a==255 && mantissa_a== 0) || (exponent_b==255 && mantissa_b==0))   //  If a or b is inf -> result is inf
+//          begin
+//            sign_o     = sign_a^sign_b;
+//            mantissa_o = mantissa_b;
+//            exponent_o = exponent_b;
+//          end
+//        else
+//          begin
+//            div_a_i   = operand_a;
+//            div_b_i   = operand_b;
+//            sign_o    = div_result_o[31];
+//            exponent_o= div_result_o[30:23];
+//            mantissa_o= div_result_o[22:0];
+//          end
+//      end
+//    FSQRT:
+//      begin
+//        if(exponent_a==255 && mantissa_a !=0) || (exponent_a==255 && mantissa_a==0)           //  if a is NaN or a is -inf -> squrt(a) = NaN
+//          begin
+//            sign_o     = sign_a;
+//            mantissa_o = mantissa_a;
+//            exponent_o = 255;
+//          end
+//        else if(exponent_b==255 && mantissa_b !=0)       // if a is 0 ->  squrt(a) = 0
+//          begin
+//            sign_o     = sign_b;
+//            mantissa_o = mantissa_b;
+//            exponent_o = exponent_b;
+//          end
+//        else if(exponent_a==255 && mantissa_a== 0)       //  If a is +inf -> result is +inf
+//          begin
+//            sign_o     = sign_a^sign_b;
+//            mantissa_o = mantissa_b;
+//            exponent_o = exponent_b;
+//          end
+//        else
+//          begin
+//            sqrt_a_i  = operand_a;
+//            sign_o    = sqrt_result_o[31];
+//            exponent_o= sqrt_result_o[30:23];
+//            mantissa_o= sqrt_result_o[22:0];
+//          end
+//      end
+    FSIGNJ:
+      begin
+        result_o = {operand_b[31],operand_a[30:0]};
+      end
+    FSIGNJN:
+      begin
+        result_o = ~{operand_b[31],operand_a[30:0]};
+      end
+    FSIGNJX:
+      begin
+        result_o = {operand_a[31]^operand_b[31],operand_a[30:0]};
+      end
+    FMIN:
+      begin
+        result_o = min;
+      end
+    FMAX:
+      begin
+        result_o = max;
+      end
+    FEQ:
+      begin
+        result_o = {{30{0}},equal};
+      end
+    FLT:
+      begin
+        result_o = {{30{0}},less};
+      end
+    FLE:
+      begin
+        result_o = {{30{0}},leq};
+      end
+//    FMADD:
+//      begin
+//      end
+//    FMSUB:
+//      begin
+//      end
+//    FNMADD:
+//      begin
+//      end
+//    FNMSUB:
+//      begin
+//      end
+  default:;
+  endcase
+end
+endmodule
+

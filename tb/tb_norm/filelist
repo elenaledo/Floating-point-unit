@@ -1,0 +1,9 @@
+../../adder.sv
+../../add_normalizer.sv
+../../fadd_sub.sv
+../../round.sv
+../../normal.sv
+../../lzc_4.sv
+../../lzc_8.sv
+../../lzc_16.sv
+../../lzc_32.sv

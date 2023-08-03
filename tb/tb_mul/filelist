@@ -1,0 +1,6 @@
+../../fpu.sv
+../../normal.sv
+../../lzc_4.sv
+../../lzc_8.sv
+../../lzc_16.sv
+../../lzc_32.sv
